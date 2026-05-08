@@ -8,81 +8,28 @@ HTML_PAGE = """
 <html>
 <head>
     <title>YouTube Downloader</title>
-    <style>
-        body {
-            font-family: Arial;
-            background: #111;
-            color: white;
-            text-align: center;
-            padding-top: 100px;
-        }
-
-        input {
-            width: 400px;
-            padding: 12px;
-            border-radius: 8px;
-            border: none;
-            font-size: 16px;
-        }
-
-        button {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            background: red;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-
-        #result {
-            margin-top: 30px;
-        }
-
-        a {
-            color: cyan;
-        }
-    </style>
 </head>
 <body>
+    <h1>YouTube Downloader</h1>
+    <input id="url" placeholder="Paste YouTube link">
+    <button onclick="send()">Download</button>
 
-    <h1>YouTube Video Downloader</h1>
+    <pre id="out"></pre>
 
-    <input type="text" id="url" placeholder="Paste YouTube URL">
-    <button onclick="downloadVideo()">Get Video</button>
+<script>
+async function send(){
+    const url = document.getElementById("url").value;
 
-    <div id="result"></div>
+    const res = await fetch("/download", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({url})
+    });
 
-    <script>
-        async function downloadVideo() {
-            const url = document.getElementById("url").value;
-
-            const response = await fetch("/download", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ url })
-            });
-
-            const data = await response.json();
-
-            if (data.error) {
-                document.getElementById("result").innerHTML =
-                    `<p>${data.error}</p>`;
-            } else {
-                document.getElementById("result").innerHTML = `
-                    <h2>${data.title}</h2>
-                    <p>Author: ${data.author}</p>
-                    <p>Views: ${data.views}</p>
-                    <a href="${data.download_url}" target="_blank">
-                        Download Video
-                    </a>
-                `;
-            }
-        }
-    </script>
+    const data = await res.json();
+    document.getElementById("out").innerText = JSON.stringify(data, null, 2);
+}
+</script>
 
 </body>
 </html>
@@ -93,27 +40,16 @@ def home():
     return render_template_string(HTML_PAGE)
 
 @app.route("/download", methods=["POST"])
-def download_video():
-    try:
-        data = request.get_json()
-        video_url = data.get("url")
+def download():
+    data = request.get_json()
+    yt = YouTube(data["url"])
+    stream = yt.streams.get_highest_resolution()
 
-        if not video_url:
-            return jsonify({"error": "No URL provided"}), 400
+    return jsonify({
+        "title": yt.title,
+        "download_url": stream.url
+    })
 
-        yt = YouTube(video_url)
-        stream = yt.streams.get_highest_resolution()
-
-        return jsonify({
-            "title": yt.title,
-            "author": yt.author,
-            "views": yt.views,
-            "download_url": stream.url
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+# IMPORTANT FOR VERCEL
+def handler(environ, start_response):
+    return app(environ, start_response)
