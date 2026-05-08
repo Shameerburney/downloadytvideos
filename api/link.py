@@ -1,27 +1,54 @@
-import streamlit as st
+from flask import Flask, request, jsonify, render_template_string
 from pytubefix import YouTube
 
-st.title("🎥 YouTube Downloader")
+app = Flask(__name__)
 
-# ---- Input ----
-url = st.text_input("Paste YouTube link")
+HTML_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>YouTube Downloader</title>
+</head>
+<body>
+    <h1>YouTube Downloader</h1>
+    <input id="url" placeholder="Paste YouTube link">
+    <button onclick="send()">Download</button>
 
-# ---- Action ----
-if st.button("Download"):
-    if not url:
-        st.error("Please enter a URL")
-    else:
-        try:
-            yt = YouTube(url)
-            stream = yt.streams.get_highest_resolution()
+    <pre id="out"></pre>
 
-            st.success("Video fetched successfully!")
+<script>
+async function send(){
+    const url = document.getElementById("url").value;
 
-            st.write("### Title")
-            st.write(yt.title)
+    const res = await fetch("/download", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({url})
+    });
 
-            st.write("### Download Link")
-            st.markdown(stream.url)
+    const data = await res.json();
+    document.getElementById("out").innerText = JSON.stringify(data, null, 2);
+}
+</script>
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    return render_template_string(HTML_PAGE)
+
+@app.route("/download", methods=["POST"])
+def download():
+    data = request.get_json()
+    yt = YouTube(data["url"])
+    stream = yt.streams.get_highest_resolution()
+
+    return jsonify({
+        "title": yt.title,
+        "download_url": stream.url
+    })
+
+def handler(environ, start_response):
+    return app(environ, start_response)
